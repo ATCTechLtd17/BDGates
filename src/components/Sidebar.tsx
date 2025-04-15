@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquarePlus, MessageCircle, LogOut, Sun, Moon, Search, ChevronRight, User, Settings, Menu, X } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -6,6 +6,52 @@ import { logout } from '../store/slices/authSlice';
 import { useTheme } from '../context/ThemeContext';
 import { RootState } from '../store/store';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Constants
+const MOBILE_BREAKPOINT = 768;
+const SIDEBAR_WIDTH = 280;
+const COLLAPSED_WIDTH = 80;
+
+// Utility functions
+const formatDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+// Types
+interface Chat {
+  id: number;
+  title: string;
+  date: string;
+}
+
+// Memoized chat item component
+const ChatItem = React.memo(({ 
+  chat, 
+  isActive, 
+  onClick 
+}: { 
+  chat: Chat;
+  isActive: boolean; 
+  onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center gap-2 text-sm group relative ${
+      isActive ? 'bg-white/10 border-l-4 border-blue-500' : ''
+    }`}
+  >
+    <div className={`p-1.5 rounded-md ${isActive ? 'bg-blue-500' : 'bg-gray-700 group-hover:bg-gray-600'}`}>
+      <MessageCircle size={16} />
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="truncate">{chat.title}</p>
+      <p className="text-xs text-gray-400">{formatDate(chat.date)}</p>
+    </div>
+  </button>
+));
+
+ChatItem.displayName = 'ChatItem';
 
 const Sidebar = () => {
   const dispatch = useDispatch();
@@ -16,55 +62,69 @@ const Sidebar = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
 
-  // Handle window resize
-  useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      
-      // Auto-collapse sidebar on mobile
-      if (mobile) {
-        setIsCollapsed(true);
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  const dummyChats = [
+  // Memoized dummy chats
+  const dummyChats = useMemo<Chat[]>(() => [
     { id: 1, title: 'Business Planning Discussion', date: '2023-06-15' },
     { id: 2, title: 'Tax Consultation', date: '2023-06-14' },
     { id: 3, title: 'VAT Registration Help', date: '2023-06-13' },
     { id: 4, title: 'Ministry Guidelines', date: '2023-06-12' },
-  ];
+  ], []);
 
-  const filteredChats = dummyChats.filter(chat => 
-    chat.title.toLowerCase().includes(searchQuery.toLowerCase())
+  // Memoized filtered chats
+  const filteredChats = useMemo(() => 
+    dummyChats.filter(chat => 
+      chat.title.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [dummyChats, searchQuery]
   );
 
-  const handleLogout = () => {
+  // Optimized resize handler with debounce
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+        setIsMobile(mobile);
+        if (mobile) {
+          setIsCollapsed(true);
+        }
+      }, 150);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // Memoized handlers
+  const handleLogout = useCallback(() => {
     dispatch(logout());
     navigate('/login');
-  };
+  }, [dispatch, navigate]);
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     // Logic to create a new chat
     console.log('Creating new chat');
-  };
+  }, []);
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+  const toggleMobileMenu = useCallback(() => {
+    setIsMobileMenuOpen(prev => !prev);
+  }, []);
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchQuery(e.target.value);
+  }, []);
 
-  // Mobile menu toggle button
+  const handleChatClick = useCallback((chatId: number) => {
+    navigate(`/chat/${chatId}`);
+  }, [navigate]);
+
+  // Mobile menu toggle button component
   const MobileMenuToggle = () => (
     <button 
       onClick={toggleMobileMenu}
@@ -137,7 +197,7 @@ const Sidebar = () => {
                   type="text"
                   placeholder="Search conversations..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={handleSearchChange}
                   className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -145,20 +205,12 @@ const Sidebar = () => {
 
             <div className="flex-1 overflow-y-auto mt-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
               {filteredChats.map((chat) => (
-                <button
+                <ChatItem
                   key={chat.id}
-                  className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center gap-2 text-sm group relative ${
-                    location.pathname === `/chat/${chat.id}` ? 'bg-white/10 border-l-4 border-blue-500' : ''
-                  }`}
-                >
-                  <div className={`p-1.5 rounded-md ${location.pathname === `/chat/${chat.id}` ? 'bg-blue-500' : 'bg-gray-700 group-hover:bg-gray-600'}`}>
-                    <MessageCircle size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate">{chat.title}</p>
-                    <p className="text-xs text-gray-400">{formatDate(chat.date)}</p>
-                  </div>
-                </button>
+                  chat={chat}
+                  isActive={location.pathname === `/chat/${chat.id}`}
+                  onClick={() => handleChatClick(chat.id)}
+                />
               ))}
             </div>
 
@@ -252,7 +304,7 @@ const Sidebar = () => {
               type="text"
               placeholder="Search conversations..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
               className="w-full bg-gray-800/50 border border-gray-700 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -262,22 +314,12 @@ const Sidebar = () => {
       {/* Chat List */}
       <div className="flex-1 overflow-y-auto mt-4 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
         {filteredChats.map((chat) => (
-          <button
+          <ChatItem
             key={chat.id}
-            className={`w-full text-left px-4 py-3 hover:bg-white/10 transition-colors flex items-center gap-2 text-sm group relative ${
-              location.pathname === `/chat/${chat.id}` ? 'bg-white/10 border-l-4 border-blue-500' : ''
-            }`}
-          >
-            <div className={`p-1.5 rounded-md ${location.pathname === `/chat/${chat.id}` ? 'bg-blue-500' : 'bg-gray-700 group-hover:bg-gray-600'}`}>
-              <MessageCircle size={16} />
-            </div>
-            {!isCollapsed && (
-              <div className="flex-1 min-w-0">
-                <p className="truncate">{chat.title}</p>
-                <p className="text-xs text-gray-400">{formatDate(chat.date)}</p>
-              </div>
-            )}
-          </button>
+            chat={chat}
+            isActive={location.pathname === `/chat/${chat.id}`}
+            onClick={() => handleChatClick(chat.id)}
+          />
         ))}
       </div>
 
@@ -312,4 +354,4 @@ const Sidebar = () => {
   );
 };
 
-export default Sidebar;
+export default React.memo(Sidebar);
