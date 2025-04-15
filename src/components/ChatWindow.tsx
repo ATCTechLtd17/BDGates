@@ -1,188 +1,165 @@
-import React, { useState, useEffect } from 'react';
-import MessageInput from './MessageInput';
-import MessageBubble from './MessageBubble';
-import { useChat } from '../context/ChatContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Bot, Search, Filter, Download, MoreVertical, Menu, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Send, Paperclip, Smile, MoreVertical } from 'lucide-react';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState, AppDispatch } from '../store/store';
+import { addMessage } from '../store/slices/chatSlice';
 
-export const ChatWindow = () => {
-  const { messages } = useChat();
-  const chatRef = React.useRef<HTMLDivElement>(null);
+interface Message {
+  id: string;
+  text: string;
+  sender: 'user' | 'ai';
+  timestamp: Date;
+}
+
+const ChatWindow: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const messages = useSelector((state: RootState) => state.chat.messages);
+  const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new messages arrive
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
+    scrollToBottom();
   }, [messages]);
 
-  // Simulate AI typing indicator
-  useEffect(() => {
-    if (messages.length > 0 && messages[messages.length - 1].isAI === false) {
-      setIsTyping(true);
-      const timer = setTimeout(() => setIsTyping(false), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [messages]);
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim()) return;
 
-  const handleSuggestionClick = (suggestion: string) => {
-    // Here you would typically send this to your chat context
-    console.log(`Selected suggestion: ${suggestion}`);
+    const userMessage = {
+      id: Date.now().toString(),
+      content: inputMessage,
+      isAI: false,
+      timestamp: Date.now(),
+    };
+
+    dispatch(addMessage(userMessage));
+    setInputMessage('');
+    setIsTyping(true);
+
+    // Simulate AI response
+    setTimeout(() => {
+      const aiMessage = {
+        id: (Date.now() + 1).toString(),
+        content: 'This is a simulated response. In a real application, this would be connected to an AI service.',
+        isAI: true,
+        timestamp: Date.now(),
+      };
+      dispatch(addMessage(aiMessage));
+      setIsTyping(false);
+    }, 1500);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
       {/* Chat Header */}
-      <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-3 md:p-4 flex items-center justify-between z-30 relative">
-        <div className="flex items-center gap-2 md:gap-3 ml-10 md:ml-0">
-          <div className="p-1.5 md:p-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600">
-            <Bot size={18} className="text-white md:w-5 md:h-5" />
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center">
+            <span className="text-white font-semibold">AI</span>
           </div>
           <div>
-            <h2 className="font-medium text-sm md:text-base">BDgates Assistant</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">Always here to help</p>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">AI Assistant</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Always here to help</p>
           </div>
         </div>
-        
-        <div className="flex items-center gap-1 md:gap-2">
-          {/* Mobile search toggle */}
-          <button 
-            onClick={() => setShowMobileSearch(!showMobileSearch)}
-            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors md:hidden"
-            aria-label="Toggle search"
-          >
-            <Search size={18} />
-          </button>
-          
-          {/* Desktop search */}
-          <div className="relative hidden md:block">
-            <input
-              type="text"
-              placeholder="Search messages..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 rounded-lg border dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-48"
-            />
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          </div>
-          
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className={`p-2 rounded-lg transition-colors ${
-              showFilters ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}
-            aria-label="Filter messages"
-          >
-            <Filter size={18} />
-          </button>
-          
-          <button 
-            className="p-2 rounded-lg text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label="More options"
-          >
-            <MoreVertical size={18} />
-          </button>
-        </div>
+        <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+          <MoreVertical className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+        </button>
       </div>
 
-      {/* Mobile Search Bar */}
-      <AnimatePresence>
-        {showMobileSearch && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-3"
+      {/* Messages Container */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center p-4">
+            <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-2">Welcome to the Chat</h3>
+            <p className="text-gray-500 dark:text-gray-400 max-w-md">
+              Start a conversation by typing a message below. I'm here to help with any questions you might have.
+            </p>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <motion.div
+              key={message.id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className={`flex ${message.isAI ? 'justify-start' : 'justify-end'}`}
+            >
+              <div
+                className={`max-w-[70%] rounded-lg p-3 ${
+                  message.isAI
+                    ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white'
+                    : 'bg-indigo-600 text-white'
+                }`}
+              >
+                <p className="text-sm">{message.content}</p>
+                <span className="text-xs opacity-70 mt-1 block">
+                  {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            </motion.div>
+          ))
+        )}
+        {isTyping && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex justify-start"
           >
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search messages..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-lg border dark:border-gray-700 bg-gray-100 dark:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3">
+              <div className="flex space-x-2">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+              </div>
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
-
-      {/* Chat Content */}
-      <div className="flex-1 overflow-y-auto">
-        {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-center p-4">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="max-w-xl w-full"
-            >
-              <h1 className="text-3xl md:text-4xl font-bold mb-4 md:mb-6 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-                Welcome to BDgates
-              </h1>
-              <p className="text-base md:text-lg text-gray-600 dark:text-gray-400 mb-6 md:mb-8">
-                Your AI assistant for business and regulatory guidance in Bangladesh
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                {[
-                  "How do I register a company?",
-                  "What are the VAT requirements?",
-                  "Guide me through tax filing",
-                  "Export-import regulations"
-                ].map((suggestion, index) => (
-                  <motion.button
-                    key={index}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="p-3 md:p-4 text-left border dark:border-gray-700 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors shadow-sm hover:shadow-md text-sm md:text-base"
-                  >
-                    {suggestion}
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        ) : (
-          <div ref={chatRef} className="flex-1 overflow-y-auto space-y-3 md:space-y-4 p-3 md:p-4">
-            <AnimatePresence>
-              {messages.map((message, index) => (
-                <MessageBubble
-                  key={index}
-                  isAI={message.isAI}
-                  content={message.content}
-                />
-              ))}
-            </AnimatePresence>
-            
-            {/* Typing indicator */}
-            {isTyping && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2 p-2 md:p-3 bg-gray-100 dark:bg-gray-800 rounded-lg w-fit"
-              >
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                </div>
-                <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400">AI is typing...</span>
-              </motion.div>
-            )}
-          </div>
-        )}
+        <div ref={messagesEndRef} />
       </div>
-      
-      {/* Message Input */}
-      <MessageInput />
+
+      {/* Input Area */}
+      <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex items-center space-x-2">
+          <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+            <Paperclip className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+          </button>
+          <div className="flex-1">
+            <textarea
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Type your message..."
+              className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white resize-none"
+              rows={1}
+            />
+          </div>
+          <button className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
+            <Smile className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+          </button>
+          <button
+            onClick={handleSendMessage}
+            disabled={!inputMessage.trim()}
+            className="p-2 rounded-full bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
+
+export default ChatWindow;
