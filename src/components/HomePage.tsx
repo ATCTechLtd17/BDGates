@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Send, ArrowRight, Sparkles, Shield, Zap, Globe, Bot } from 'lucide-react';
+import { ArrowRight, Sparkles, Shield, Zap, Globe, Bot } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Navigation from './Navigation';
 
